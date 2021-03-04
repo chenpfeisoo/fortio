@@ -22,6 +22,8 @@ const (
 	target99        = "99%"
 	target999       = "99.9%"
 	time            = "5s"
+	//每一组测试数据跑的次数
+	count = 3
 )
 
 func main() {
@@ -31,19 +33,21 @@ func fortio(data Testdata) {
 	if data == nil {
 		panic("测试数据构造不完整，请重新配置")
 	}
-	var args1, args2 string
-	for args1, args2 = range data {
-		kubectlcmd := "kubectl exec " + getPodname(fortioclient) + " -- fortio load -c " + args1 + " -qps " + args2 + " -t " + time + " " + FortioServerUrl
-		klog.Info("测试命令：\n" + kubectlcmd)
-		output, err := exec.Command("/bin/sh", "-c", kubectlcmd).CombinedOutput()
-		if err != nil {
-			panic("fortio测试失败" + err.Error())
+	for args1, args2 := range data {
+		klog.Infof("测试组合 connection :%v ，Qps :%v：\n",args1,args2)
+		for i := 1; i <= count; i++ {
+			kubectlcmd := "kubectl exec " + getPodname(fortioclient) + " -- fortio load -c " + args1 + " -qps " + args2 + " -t " + time + " " + FortioServerUrl
+			output, err := exec.Command("/bin/sh", "-c", kubectlcmd).CombinedOutput()
+			if err != nil {
+				panic("fortio测试失败" + err.Error())
+			}
+			//执行日志写入log
+			writeLog(string(output))
 		}
-		//执行日志写入log
-		writeLog(string(output))
+		//分析结果
+		show()
+		deletelog()
 	}
-	//分析结果
-	show()
 }
 
 func getPodname(podregex string) string {
@@ -58,26 +62,32 @@ func getPodname(podregex string) string {
 //构造测试数据
 func makeTestdata() Testdata {
 	return Testdata{
-		"4": "1000",
-		"5": "2000",
+		"1":  "1000",
+		"2":  "1000",
+		"4":  "1000",
+		"8":  "1000",
+		"16": "1000",
+		"32": "1000",
+		"64": "1000",
 	}
 }
 
 //结果展示
-func show(){
-	klog.Infof("测试次数：%v 次 ，测试结果如下\n",len(makeTestdata()))
+func show() {
+	klog.Info("测试结果如下\n")
 	result(target50)
 	result(target75)
 	result(target90)
 	result(target99)
 	result(target999)
 }
+
 //执行数据分析
 func result(metric string) {
-	a:= func(metric string) {
-	 	cmd:="cat ./log | grep \"# target\"  | grep \""+metric+ "\"| awk '{sum+=$NF}END{print \""+metric +" Average = \", sum/NR}'"
+	a := func(metric string) {
+		cmd := "cat ./log | grep \"# target\"  | grep \"" + metric + "\"| awk '{sum+=$NF}END{print \"" + metric + " Average = \", sum/NR}'"
 		//klog.Info(cmd)
-	 	output, err := exec.Command("/bin/sh", "-c", cmd).CombinedOutput()
+		output, err := exec.Command("/bin/sh", "-c", cmd).CombinedOutput()
 		if err != nil {
 			panic(cmd + "执行失败" + err.Error())
 		}
@@ -116,16 +126,16 @@ func grepStr(str string) string {
 //写日志
 func writeLog(str string) {
 	_, err := ioutil.ReadFile(logfile())
-	if err != nil && strings.Contains(err.Error(),"no such file or directory"){
-		_,err = os.Create(logfile())
-		if err!=nil{
-			panic("创建文件失败"+err.Error())
+	if err != nil && strings.Contains(err.Error(), "no such file or directory") {
+		_, err = os.Create(logfile())
+		if err != nil {
+			panic("创建文件失败" + err.Error())
 		}
 	}
 	filePath := logfile()
 	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
-		panic("打开文件失败"+err.Error())
+		panic("打开文件失败" + err.Error())
 	}
 	defer file.Close()
 	//写入文件时，使用带缓存的 *Writer
@@ -136,4 +146,11 @@ func writeLog(str string) {
 
 func logfile() string {
 	return "./log"
+}
+
+func deletelog() {
+	err := os.Remove(logfile())
+	if err != nil {
+		panic(err.Error())
+	}
 }
