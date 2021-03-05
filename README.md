@@ -3,7 +3,7 @@ fortio压测 istio，数据分析工具 </br>
 需要提前部署好fortio server和 clinet </br>
 运行如下命令 
 ```shell
-    kubectl exec " + getPodname(fortioclient) + " -- fortio load -c " + args1 + " -qps " + args2 + " -t " + time + " " + FortioServerUrl
+    kubectl exec   fortioclientpod -- fortio load -c  args1   -qps   args2  -t  time   FortioServerUrl
 ```
 测试数据 ,每组测试数据执行三次，算均值 </br>
 ```shell
